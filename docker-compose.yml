@@ -1,0 +1,38 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Your_password123"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+
+  api:
+    build:
+      context: ./backend/LearnOS.Api
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__LearnOsDb: "Server=sqlserver,1433;Database=LearnOSAI;User Id=sa;Password=Your_password123;TrustServerCertificate=True"
+      Jwt__Issuer: "LearnOSAI"
+      Jwt__Audience: "LearnOSAI.Web"
+      Jwt__SigningKey: "change-this-production-signing-key-before-deploying"
+      OpenAI__ApiKey: "${OPENAI_API_KEY:-}"
+      OpenAI__Model: "gpt-5"
+      OpenAI__BaseUrl: "https://api.openai.com/v1"
+    depends_on:
+      - sqlserver
+    ports:
+      - "5000:8080"
+
+  web:
+    build:
+      context: .
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
+
+volumes:
+  sqlserver-data:
