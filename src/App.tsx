@@ -259,6 +259,9 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof LayoutDashboard }> 
 
 const AUTH_STORAGE_KEY = 'learnos.auth'
 const OFFLINE_REMINDER_QUEUE_KEY = 'learnos.offline.reminders'
+const OFFLINE_FLASHCARD_QUEUE_KEY = 'learnos.offline.flashcards'
+const OFFLINE_REVIEW_QUEUE_KEY = 'learnos.offline.reviews'
+const OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY = 'learnos.offline.quizAttempts'
 
 type QueuedReminder = {
   id: string
@@ -266,6 +269,42 @@ type QueuedReminder = {
   note: string
   channel: string
   dueAt: string
+  queuedAt: string
+}
+
+type FlashcardPayload = {
+  question: string
+  answer: string
+  hint: string
+  difficulty: string
+  tag: string
+}
+
+type QueuedFlashcard = FlashcardPayload & {
+  id: string
+  queuedAt: string
+}
+
+type ReviewPayload = {
+  cardId: string
+  quality: number
+  responseTimeSeconds: number
+}
+
+type QueuedReview = ReviewPayload & {
+  id: string
+  queuedAt: string
+}
+
+type QuizAttemptPayload = {
+  quizId: string
+  title: string
+  durationSeconds: number
+  answers: Record<string, string>
+}
+
+type QueuedQuizAttempt = QuizAttemptPayload & {
+  id: string
   queuedAt: string
 }
 
@@ -281,20 +320,28 @@ function loadAuth(): AuthState | null {
   }
 }
 
-function loadQueuedReminders(): QueuedReminder[] {
-  const raw = localStorage.getItem(OFFLINE_REMINDER_QUEUE_KEY)
+function loadOfflineQueue<T>(key: string): T[] {
+  const raw = localStorage.getItem(key)
   if (!raw) return []
 
   try {
-    return JSON.parse(raw) as QueuedReminder[]
+    return JSON.parse(raw) as T[]
   } catch {
-    localStorage.removeItem(OFFLINE_REMINDER_QUEUE_KEY)
+    localStorage.removeItem(key)
     return []
   }
 }
 
+function saveOfflineQueue<T>(key: string, items: T[]) {
+  localStorage.setItem(key, JSON.stringify(items))
+}
+
+function loadQueuedReminders(): QueuedReminder[] {
+  return loadOfflineQueue<QueuedReminder>(OFFLINE_REMINDER_QUEUE_KEY)
+}
+
 function saveQueuedReminders(items: QueuedReminder[]) {
-  localStorage.setItem(OFFLINE_REMINDER_QUEUE_KEY, JSON.stringify(items))
+  saveOfflineQueue(OFFLINE_REMINDER_QUEUE_KEY, items)
 }
 
 function queueReminder(reminder: Omit<QueuedReminder, 'id' | 'queuedAt'>) {
@@ -307,6 +354,38 @@ function queueReminder(reminder: Omit<QueuedReminder, 'id' | 'queuedAt'>) {
       queuedAt: new Date().toISOString(),
     },
   ])
+}
+
+function queueFlashcard(payload: FlashcardPayload) {
+  const current = loadOfflineQueue<QueuedFlashcard>(OFFLINE_FLASHCARD_QUEUE_KEY)
+  saveOfflineQueue(OFFLINE_FLASHCARD_QUEUE_KEY, [
+    ...current,
+    { ...payload, id: crypto.randomUUID(), queuedAt: new Date().toISOString() },
+  ])
+}
+
+function queueReview(payload: ReviewPayload) {
+  const current = loadOfflineQueue<QueuedReview>(OFFLINE_REVIEW_QUEUE_KEY)
+  saveOfflineQueue(OFFLINE_REVIEW_QUEUE_KEY, [
+    ...current,
+    { ...payload, id: crypto.randomUUID(), queuedAt: new Date().toISOString() },
+  ])
+}
+
+function queueQuizAttempt(payload: QuizAttemptPayload) {
+  const current = loadOfflineQueue<QueuedQuizAttempt>(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY)
+  saveOfflineQueue(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY, [
+    ...current,
+    { ...payload, id: crypto.randomUUID(), queuedAt: new Date().toISOString() },
+  ])
+}
+
+function getOfflineLearningQueueCount() {
+  return (
+    loadOfflineQueue<QueuedFlashcard>(OFFLINE_FLASHCARD_QUEUE_KEY).length
+    + loadOfflineQueue<QueuedReview>(OFFLINE_REVIEW_QUEUE_KEY).length
+    + loadOfflineQueue<QueuedQuizAttempt>(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY).length
+  )
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -352,6 +431,7 @@ function App() {
   const [error, setError] = useState('')
   const [isOnline, setIsOnline] = useState(() => navigator.onLine)
   const [offlineReminderCount, setOfflineReminderCount] = useState(() => loadQueuedReminders().length)
+  const [offlineLearningCount, setOfflineLearningCount] = useState(() => getOfflineLearningQueueCount())
 
   const refreshData = useCallback(async () => {
     const currentAuth = loadAuth()
@@ -432,27 +512,100 @@ function App() {
     }
   }, [refreshData])
 
+  const syncOfflineLearning = useCallback(async () => {
+    if (!navigator.onLine || !loadAuth()) return
+    const queuedFlashcards = loadOfflineQueue<QueuedFlashcard>(OFFLINE_FLASHCARD_QUEUE_KEY)
+    const queuedReviews = loadOfflineQueue<QueuedReview>(OFFLINE_REVIEW_QUEUE_KEY)
+    const queuedQuizAttempts = loadOfflineQueue<QueuedQuizAttempt>(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY)
+    const initialCount = queuedFlashcards.length + queuedReviews.length + queuedQuizAttempts.length
+    if (initialCount === 0) {
+      setOfflineLearningCount(0)
+      return
+    }
+
+    const remainingFlashcards: QueuedFlashcard[] = []
+    for (const card of queuedFlashcards) {
+      try {
+        await api('/flashcards', {
+          method: 'POST',
+          body: JSON.stringify({
+            question: card.question,
+            answer: card.answer,
+            hint: card.hint,
+            difficulty: card.difficulty,
+            tag: card.tag,
+          }),
+        })
+      } catch {
+        remainingFlashcards.push(card)
+      }
+    }
+
+    const remainingReviews: QueuedReview[] = []
+    for (const review of queuedReviews) {
+      try {
+        await api(`/reviews/${review.cardId}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            quality: review.quality,
+            responseTimeSeconds: review.responseTimeSeconds,
+          }),
+        })
+      } catch {
+        remainingReviews.push(review)
+      }
+    }
+
+    const remainingQuizAttempts: QueuedQuizAttempt[] = []
+    for (const attempt of queuedQuizAttempts) {
+      try {
+        await api('/quiz-attempts', {
+          method: 'POST',
+          body: JSON.stringify({
+            quizId: attempt.quizId,
+            title: attempt.title,
+            durationSeconds: attempt.durationSeconds,
+            answers: attempt.answers,
+          }),
+        })
+      } catch {
+        remainingQuizAttempts.push(attempt)
+      }
+    }
+
+    saveOfflineQueue(OFFLINE_FLASHCARD_QUEUE_KEY, remainingFlashcards)
+    saveOfflineQueue(OFFLINE_REVIEW_QUEUE_KEY, remainingReviews)
+    saveOfflineQueue(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY, remainingQuizAttempts)
+    const remainingCount = remainingFlashcards.length + remainingReviews.length + remainingQuizAttempts.length
+    setOfflineLearningCount(remainingCount)
+    if (remainingCount !== initialCount) {
+      await refreshData()
+    }
+  }, [refreshData])
+
   useEffect(() => {
     if (!auth) {
       setIsLoading(false)
       return
     }
 
-    syncQueuedReminders()
+    Promise.all([syncQueuedReminders(), syncOfflineLearning()])
       .then(refreshData)
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false))
-  }, [auth, refreshData, syncQueuedReminders])
+  }, [auth, refreshData, syncOfflineLearning, syncQueuedReminders])
 
   useEffect(() => {
     function handleOnline() {
       setIsOnline(true)
       syncQueuedReminders().catch((err: Error) => setError(err.message))
+      syncOfflineLearning().catch((err: Error) => setError(err.message))
     }
 
     function handleOffline() {
       setIsOnline(false)
       setOfflineReminderCount(loadQueuedReminders().length)
+      setOfflineLearningCount(getOfflineLearningQueueCount())
     }
 
     window.addEventListener('online', handleOnline)
@@ -461,7 +614,7 @@ function App() {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [syncQueuedReminders])
+  }, [syncOfflineLearning, syncQueuedReminders])
 
   function handleAuth(nextAuth: AuthState) {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(nextAuth))
@@ -533,7 +686,7 @@ function App() {
     [studySeries],
   )
   const pendingReminderCount = reminders.filter((reminder) => !reminder.isCompleted).length
-  const totalNotificationCount = pendingReminderCount + offlineReminderCount
+  const totalNotificationCount = pendingReminderCount + offlineReminderCount + offlineLearningCount
 
   if (!auth) {
     return <AuthScreen onAuthenticated={handleAuth} />
@@ -606,7 +759,7 @@ function App() {
         {error && <div className="error-banner">{error}</div>}
         {!isOnline && (
           <div className="offline-banner">
-            Offline mode is active. New reminders will sync when your connection returns.
+            Offline mode is active. New reminders, flashcard reviews, manual cards, and quiz attempts will sync when your connection returns.
           </div>
         )}
 
@@ -660,9 +813,20 @@ function App() {
             selectedCard={selectedCard}
             setSelectedCard={setSelectedCard}
             onChanged={refreshData}
+            isOnline={isOnline}
+            offlineQueueCount={offlineLearningCount}
+            onQueued={() => setOfflineLearningCount(getOfflineLearningQueueCount())}
           />
         )}
-        {activeTab === 'quiz' && <QuizEngine quiz={quiz} onChanged={refreshData} />}
+        {activeTab === 'quiz' && (
+          <QuizEngine
+            quiz={quiz}
+            onChanged={refreshData}
+            isOnline={isOnline}
+            offlineQueueCount={offlineLearningCount}
+            onQueued={() => setOfflineLearningCount(getOfflineLearningQueueCount())}
+          />
+        )}
         {activeTab === 'roadmap' && <Roadmap roadmap={roadmap} onChanged={refreshData} />}
         {activeTab === 'classroom' && (
           <Classroom courses={courses} userRole={auth.user.role} onChanged={refreshData} />
@@ -1038,23 +1202,52 @@ function FlashcardStudio({
   selectedCard,
   setSelectedCard,
   onChanged,
+  isOnline,
+  offlineQueueCount,
+  onQueued,
 }: {
   activeFlashcard?: Flashcard
   flashcards: Flashcard[]
   selectedCard: number
   setSelectedCard: (index: number) => void
   onChanged: () => Promise<void>
+  isOnline: boolean
+  offlineQueueCount: number
+  onQueued: () => void
 }) {
   const [topic, setTopic] = useState('')
   const [content, setContent] = useState('')
+  const [manualQuestion, setManualQuestion] = useState('')
+  const [manualAnswer, setManualAnswer] = useState('')
+  const [manualHint, setManualHint] = useState('')
+  const [manualTag, setManualTag] = useState('General')
+  const [manualDifficulty, setManualDifficulty] = useState('Medium')
+  const [status, setStatus] = useState('')
   const [isSaving, setIsSaving] = useState(false)
 
   async function reviewCard(quality: number) {
     if (!activeFlashcard) return
+    const payload = {
+      cardId: activeFlashcard.id,
+      quality,
+      responseTimeSeconds: 45,
+    }
+
+    if (!isOnline) {
+      queueReview(payload)
+      onQueued()
+      setStatus('Review queued for sync when you are back online.')
+      return
+    }
+
     await api(`/reviews/${activeFlashcard.id}`, {
       method: 'POST',
-      body: JSON.stringify({ quality, responseTimeSeconds: 45 }),
+      body: JSON.stringify({
+        quality: payload.quality,
+        responseTimeSeconds: payload.responseTimeSeconds,
+      }),
     })
+    setStatus('')
     await onChanged()
   }
 
@@ -1080,9 +1273,46 @@ function FlashcardStudio({
     }
   }
 
+  async function createManualCard() {
+    if (!manualQuestion.trim() || !manualAnswer.trim()) return
+    const payload = {
+      question: manualQuestion.trim(),
+      answer: manualAnswer.trim(),
+      hint: manualHint.trim(),
+      difficulty: manualDifficulty,
+      tag: manualTag.trim() || 'General',
+    }
+
+    if (!isOnline) {
+      queueFlashcard(payload)
+      setManualQuestion('')
+      setManualAnswer('')
+      setManualHint('')
+      onQueued()
+      setStatus('Manual flashcard queued for sync when you are back online.')
+      return
+    }
+
+    await api('/flashcards', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+    setManualQuestion('')
+    setManualAnswer('')
+    setManualHint('')
+    setStatus('')
+    await onChanged()
+  }
+
   return (
     <section className="content-grid">
       <div className="panel wide flashcard-panel">
+        {offlineQueueCount > 0 && (
+          <div className="offline-banner">
+            {offlineQueueCount} learning action{offlineQueueCount === 1 ? '' : 's'} waiting to sync.
+          </div>
+        )}
+        {status && <div className="success-banner">{status}</div>}
         {activeFlashcard ? (
           <>
             <div className="panel-header">
@@ -1139,6 +1369,19 @@ function FlashcardStudio({
           <button className="primary-button" onClick={generateCards} disabled={isSaving} type="button">
             {isSaving ? 'Saving...' : 'Save generated cards'}
           </button>
+          <span className="form-divider">Manual card</span>
+          <input value={manualTag} onChange={(event) => setManualTag(event.target.value)} placeholder="Subject tag" />
+          <select value={manualDifficulty} onChange={(event) => setManualDifficulty(event.target.value)}>
+            <option>Easy</option>
+            <option>Medium</option>
+            <option>Hard</option>
+          </select>
+          <input value={manualQuestion} onChange={(event) => setManualQuestion(event.target.value)} placeholder="Question" />
+          <textarea value={manualAnswer} onChange={(event) => setManualAnswer(event.target.value)} placeholder="Answer" />
+          <input value={manualHint} onChange={(event) => setManualHint(event.target.value)} placeholder="Optional hint" />
+          <button className="secondary-button" onClick={createManualCard} type="button">
+            Save manual card
+          </button>
         </div>
         <div className="deck-list">
           {flashcards.map((card, index) => (
@@ -1157,7 +1400,19 @@ function FlashcardStudio({
   )
 }
 
-function QuizEngine({ quiz, onChanged }: { quiz: Quiz | null; onChanged: () => Promise<void> }) {
+function QuizEngine({
+  quiz,
+  onChanged,
+  isOnline,
+  offlineQueueCount,
+  onQueued,
+}: {
+  quiz: Quiz | null
+  onChanged: () => Promise<void>
+  isOnline: boolean
+  offlineQueueCount: number
+  onQueued: () => void
+}) {
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [result, setResult] = useState<string>('')
   const questions = quiz?.questions ?? []
@@ -1174,16 +1429,25 @@ function QuizEngine({ quiz, onChanged }: { quiz: Quiz | null; onChanged: () => P
 
   async function submitQuiz() {
     if (!quiz || quiz.id === '00000000-0000-0000-0000-000000000000') return
+    const payload = {
+      quizId: quiz.id,
+      title: quiz.title,
+      durationSeconds: 240,
+      answers,
+    }
+
+    if (!isOnline) {
+      queueQuizAttempt(payload)
+      onQueued()
+      setResult('Quiz attempt queued for sync when you are back online.')
+      return
+    }
+
     const response = await api<{ accuracy: number; correctCount: number; totalCount: number }>('/quiz-attempts', {
       method: 'POST',
-      body: JSON.stringify({
-        quizId: quiz.id,
-        title: quiz.title,
-        durationSeconds: 240,
-        answers,
-      }),
+      body: JSON.stringify(payload),
     })
-    setResult(`${response.correctCount}/${response.totalCount} correct · ${response.accuracy}% accuracy`)
+    setResult(`${response.correctCount}/${response.totalCount} correct - ${response.accuracy}% accuracy`)
     await onChanged()
   }
 
@@ -1197,6 +1461,11 @@ function QuizEngine({ quiz, onChanged }: { quiz: Quiz | null; onChanged: () => P
           </div>
           <Trophy size={22} />
         </div>
+        {offlineQueueCount > 0 && (
+          <div className="offline-banner">
+            {offlineQueueCount} learning action{offlineQueueCount === 1 ? '' : 's'} waiting to sync.
+          </div>
+        )}
         <div className="quiz-list">
           {questions.length === 0 && <p className="muted">Create flashcards first so the backend can build a quiz from real data.</p>}
           {questions.map((question, index) => (

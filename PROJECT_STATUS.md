@@ -215,6 +215,15 @@ Work module by module. After each module is completed and verified, stop and ask
 - Added automatic reminder sync when the browser comes back online.
 - Verified production build includes `manifest.webmanifest` and `service-worker.js`.
 
+## Completed Offline Learning Sync MVP
+
+- Added local queues for manual flashcard creation, flashcard reviews, and quiz attempts.
+- Manual flashcards can now be created without AI and queued while offline.
+- Flashcard confidence reviews can be saved offline and replayed through the real SM-2 review endpoint when online.
+- Quiz attempts can be submitted offline and later synced to the backend for real scoring, analytics, study sessions, and gamification rewards.
+- Added shared offline learning action counts to the notification badge, Flashcards tab, and Quiz tab.
+- Kept generated flashcards and document upload online-only because those flows require OpenAI/network or file-blob sync design.
+
 ## Completed OCR/Audio/Video Ingestion MVP
 
 - Expanded document upload support to PNG, JPG, JPEG, WEBP, MP3, WAV, M4A, MP4, and WEBM.
@@ -311,7 +320,7 @@ Work module by module. After each module is completed and verified, stop and ask
 Most large prompt modules now have a working MVP implementation. Remaining future-hardening work:
 
 1. Google/Microsoft OAuth login.
-2. Broader offline sync for flashcards, quizzes, and documents.
+2. Offline document upload sync and richer conflict handling.
 3. Push notifications/mobile delivery.
 4. More formal unit/integration/UI/security/performance test suites.
 5. Production secrets, monitoring, and Azure deployment.

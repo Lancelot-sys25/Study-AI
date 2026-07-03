@@ -737,6 +737,15 @@ h3 {
   margin-bottom: 18px;
 }
 
+.form-divider {
+  color: #65716c;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
 .inline-form {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;

@@ -19,7 +19,7 @@ The project is designed as a commercial-grade learning product foundation inspir
 - Classroom workflow with courses, join codes, assignments, rubrics, submissions, grading, feedback, and teacher review.
 - Collaboration rooms with join codes, persisted member-only messages, and SignalR realtime delivery.
 - Planner reminders with in-app notification badge, SMTP email delivery, and offline queue sync.
-- PWA/offline MVP with manifest, service worker, offline banner, and queued reminder sync.
+- PWA/offline MVP with manifest, service worker, offline banner, queued reminders, manual flashcards, flashcard reviews, and quiz attempt sync.
 - Docker Compose and GitHub Actions CI.
 
 ## Architecture
@@ -280,7 +280,7 @@ Project implementation status is tracked in `PROJECT_STATUS.md`.
 ## Current Roadmap
 
 - Google and Microsoft OAuth login.
-- Broader offline sync for flashcards, quizzes, and documents.
+- Offline document upload sync and richer conflict handling.
 - Push/mobile notification delivery.
 - Deeper unit, integration, UI, security, and performance test suites.
 - Production secrets, monitoring, and Azure deployment.
