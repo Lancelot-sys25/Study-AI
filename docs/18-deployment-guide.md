@@ -4,7 +4,7 @@
 
 ```powershell
 npm install
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev
 ```
 
 Build:
@@ -17,7 +17,7 @@ npm run build
 
 Required services:
 
-- Frontend: Vite
+- Frontend: Next.js
 - Backend: ASP.NET Core
 - Database: SQL Server
 - Cache: Redis

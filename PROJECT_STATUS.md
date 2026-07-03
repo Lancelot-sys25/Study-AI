@@ -6,12 +6,12 @@ Work module by module. After each module is completed and verified, stop and ask
 
 ## Current Stack
 
-- Frontend: React, TypeScript, Vite
+- Frontend: Next.js, React, TypeScript
 - Backend: ASP.NET Core Web API
 - Database: SQL Server LocalDB through EF Core
 - Dev database: `LearnOSAI_Migrated`
 - Frontend URL: `http://127.0.0.1:5173`
-- Backend URL: `http://127.0.0.1:5000`
+- Backend URL: `http://localhost:3000`
 
 ## Completed
 

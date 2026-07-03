@@ -4,7 +4,7 @@
 
 - React
 - TypeScript
-- Vite
+- Next.js App Router
 - TailwindCSS-compatible CSS strategy
 - Recharts
 - Lucide icons
@@ -80,4 +80,3 @@ The current project contains a React single-page prototype in:
 - `src/index.css`
 
 It demonstrates the target UX for dashboard, flashcards, quiz, roadmap, planner, analytics, and AI tutor chat.
-

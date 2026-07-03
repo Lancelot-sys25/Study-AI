@@ -1,3 +1,5 @@
+'use client'
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as signalR from '@microsoft/signalr'
 import {
@@ -37,10 +39,10 @@ import {
   Users,
   Zap,
 } from 'lucide-react'
-import './App.css'
 
-const API_BASE = 'http://127.0.0.1:5000/api/v1'
-const HUB_BASE = 'http://127.0.0.1:5000/hubs'
+const API_BASE = 'http://localhost:3000/api/v1'
+const HUB_BASE = 'http://localhost:3000/hubs'
+const isBrowser = () => typeof window !== 'undefined'
 
 type TabKey = 'dashboard' | 'documents' | 'flashcards' | 'quiz' | 'roadmap' | 'classroom' | 'collaboration' | 'planner' | 'analytics'
 
@@ -309,6 +311,7 @@ type QueuedQuizAttempt = QuizAttemptPayload & {
 }
 
 function loadAuth(): AuthState | null {
+  if (!isBrowser()) return null
   const raw = localStorage.getItem(AUTH_STORAGE_KEY)
   if (!raw) return null
 
@@ -321,6 +324,7 @@ function loadAuth(): AuthState | null {
 }
 
 function loadOfflineQueue<T>(key: string): T[] {
+  if (!isBrowser()) return []
   const raw = localStorage.getItem(key)
   if (!raw) return []
 
@@ -333,6 +337,7 @@ function loadOfflineQueue<T>(key: string): T[] {
 }
 
 function saveOfflineQueue<T>(key: string, items: T[]) {
+  if (!isBrowser()) return
   localStorage.setItem(key, JSON.stringify(items))
 }
 
@@ -345,6 +350,7 @@ function saveQueuedReminders(items: QueuedReminder[]) {
 }
 
 function queueReminder(reminder: Omit<QueuedReminder, 'id' | 'queuedAt'>) {
+  if (!isBrowser()) return
   const current = loadQueuedReminders()
   saveQueuedReminders([
     ...current,
@@ -357,6 +363,7 @@ function queueReminder(reminder: Omit<QueuedReminder, 'id' | 'queuedAt'>) {
 }
 
 function queueFlashcard(payload: FlashcardPayload) {
+  if (!isBrowser()) return
   const current = loadOfflineQueue<QueuedFlashcard>(OFFLINE_FLASHCARD_QUEUE_KEY)
   saveOfflineQueue(OFFLINE_FLASHCARD_QUEUE_KEY, [
     ...current,
@@ -365,6 +372,7 @@ function queueFlashcard(payload: FlashcardPayload) {
 }
 
 function queueReview(payload: ReviewPayload) {
+  if (!isBrowser()) return
   const current = loadOfflineQueue<QueuedReview>(OFFLINE_REVIEW_QUEUE_KEY)
   saveOfflineQueue(OFFLINE_REVIEW_QUEUE_KEY, [
     ...current,
@@ -373,6 +381,7 @@ function queueReview(payload: ReviewPayload) {
 }
 
 function queueQuizAttempt(payload: QuizAttemptPayload) {
+  if (!isBrowser()) return
   const current = loadOfflineQueue<QueuedQuizAttempt>(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY)
   saveOfflineQueue(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY, [
     ...current,
@@ -407,7 +416,8 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function App() {
-  const [auth, setAuth] = useState<AuthState | null>(() => loadAuth())
+  const [auth, setAuth] = useState<AuthState | null>(null)
+  const [hasHydrated, setHasHydrated] = useState(false)
   const [activeTab, setActiveTab] = useState<TabKey>('dashboard')
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard)
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
@@ -429,9 +439,17 @@ function App() {
   const [question, setQuestion] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine)
-  const [offlineReminderCount, setOfflineReminderCount] = useState(() => loadQueuedReminders().length)
-  const [offlineLearningCount, setOfflineLearningCount] = useState(() => getOfflineLearningQueueCount())
+  const [isOnline, setIsOnline] = useState(true)
+  const [offlineReminderCount, setOfflineReminderCount] = useState(0)
+  const [offlineLearningCount, setOfflineLearningCount] = useState(0)
+
+  useEffect(() => {
+    setAuth(loadAuth())
+    setIsOnline(navigator.onLine)
+    setOfflineReminderCount(loadQueuedReminders().length)
+    setOfflineLearningCount(getOfflineLearningQueueCount())
+    setHasHydrated(true)
+  }, [])
 
   const refreshData = useCallback(async () => {
     const currentAuth = loadAuth()
@@ -481,7 +499,7 @@ function App() {
   }, [])
 
   const syncQueuedReminders = useCallback(async () => {
-    if (!navigator.onLine || !loadAuth()) return
+    if (!isBrowser() || !navigator.onLine || !loadAuth()) return
     const queued = loadQueuedReminders()
     if (queued.length === 0) {
       setOfflineReminderCount(0)
@@ -513,7 +531,7 @@ function App() {
   }, [refreshData])
 
   const syncOfflineLearning = useCallback(async () => {
-    if (!navigator.onLine || !loadAuth()) return
+    if (!isBrowser() || !navigator.onLine || !loadAuth()) return
     const queuedFlashcards = loadOfflineQueue<QueuedFlashcard>(OFFLINE_FLASHCARD_QUEUE_KEY)
     const queuedReviews = loadOfflineQueue<QueuedReview>(OFFLINE_REVIEW_QUEUE_KEY)
     const queuedQuizAttempts = loadOfflineQueue<QueuedQuizAttempt>(OFFLINE_QUIZ_ATTEMPT_QUEUE_KEY)
@@ -594,6 +612,13 @@ function App() {
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false))
   }, [auth, refreshData, syncOfflineLearning, syncQueuedReminders])
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js').catch(() => undefined)
+    })
+  }, [])
 
   useEffect(() => {
     function handleOnline() {
@@ -687,6 +712,10 @@ function App() {
   )
   const pendingReminderCount = reminders.filter((reminder) => !reminder.isCompleted).length
   const totalNotificationCount = pendingReminderCount + offlineReminderCount + offlineLearningCount
+
+  if (!hasHydrated) {
+    return null
+  }
 
   if (!auth) {
     return <AuthScreen onAuthenticated={handleAuth} />

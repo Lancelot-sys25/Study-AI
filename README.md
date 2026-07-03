@@ -6,7 +6,7 @@ The project is designed as a commercial-grade learning product foundation inspir
 
 ## Highlights
 
-- React, TypeScript, Vite frontend with dashboard, flashcards, documents, quiz, roadmap, classroom, collaboration, planner, analytics, parent, teacher, and admin views.
+- Next.js, React, and TypeScript frontend with dashboard, flashcards, documents, quiz, roadmap, classroom, collaboration, planner, analytics, parent, teacher, and admin views.
 - ASP.NET Core Web API backend with EF Core and SQL Server LocalDB persistence.
 - JWT authentication with refresh tokens, logout, session management, email verification, password reset, and TOTP MFA.
 - Role-based authorization for Student, Teacher, Parent, and Admin flows.
@@ -25,7 +25,7 @@ The project is designed as a commercial-grade learning product foundation inspir
 ## Architecture
 
 ```text
-React + Vite frontend
+Next.js + React frontend
         |
         | HTTP + JWT bearer auth
         v
@@ -45,7 +45,7 @@ SQL Server LocalDB / SQL Server
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | React 19, TypeScript, Vite, Recharts, Lucide React |
+| Frontend | Next.js 16, React 19, TypeScript, Recharts, Lucide React |
 | Backend | ASP.NET Core, EF Core, JWT Bearer Auth |
 | Database | SQL Server LocalDB by default |
 | AI | OpenAI Responses API and Audio Transcriptions API |
@@ -72,13 +72,13 @@ npm install
 ### Run the backend
 
 ```powershell
-dotnet run --project backend\LearnOS.Api\LearnOS.Api.csproj --urls http://127.0.0.1:5000
+dotnet run --project backend\LearnOS.Api\LearnOS.Api.csproj --urls http://localhost:3000
 ```
 
 Health check:
 
 ```text
-http://127.0.0.1:5000/api/v1/health
+http://localhost:3000/api/v1/health
 ```
 
 The backend applies EF Core migrations on startup through `Database.MigrateAsync()`.
@@ -92,7 +92,7 @@ Server=(localdb)\MSSQLLocalDB;Database=LearnOSAI_Migrated;Trusted_Connection=Tru
 ### Run the frontend
 
 ```powershell
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev
 ```
 
 Frontend URL:
@@ -165,7 +165,7 @@ docker compose up --build
 Services:
 
 - Frontend: `http://127.0.0.1:5173`
-- Backend: `http://127.0.0.1:5000`
+- Backend: `http://localhost:3000`
 - SQL Server: `localhost,1433`
 
 ## Documentation
