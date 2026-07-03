@@ -17,7 +17,7 @@ The project is designed as a commercial-grade learning product foundation inspir
 - Quiz engine with persisted quizzes, questions, scored attempts, and gamification rewards.
 - Parent/guardian linking with invite codes and scoped student progress dashboards.
 - Classroom workflow with courses, join codes, assignments, rubrics, submissions, grading, feedback, and teacher review.
-- Collaboration rooms with join codes and persisted member-only messages.
+- Collaboration rooms with join codes, persisted member-only messages, and SignalR realtime delivery.
 - Planner reminders with in-app notification badge, SMTP email delivery, and offline queue sync.
 - PWA/offline MVP with manifest, service worker, offline banner, and queued reminder sync.
 - Docker Compose and GitHub Actions CI.
@@ -154,7 +154,7 @@ dotnet build backend\LearnOS.slnx --configuration Release
 powershell -ExecutionPolicy Bypass -File scripts\smoke-test.ps1
 ```
 
-The smoke test covers authentication hardening, flashcards, SM-2 review, quiz attempts, gamification, collaboration, reminders, parent linking, classroom assignments, and submissions.
+The smoke test covers authentication hardening, SignalR negotiation, flashcards, SM-2 review, quiz attempts, gamification, collaboration, reminders, parent linking, classroom assignments, submissions, rubrics, and grading.
 
 ## Docker
 
@@ -265,6 +265,7 @@ Project implementation status is tracked in `PROJECT_STATUS.md`.
 
 ### Collaboration and Notifications
 
+- `SignalR /hubs/collaboration`
 - `GET /api/v1/collaboration/rooms`
 - `POST /api/v1/collaboration/rooms`
 - `POST /api/v1/collaboration/rooms/join`
@@ -280,7 +281,6 @@ Project implementation status is tracked in `PROJECT_STATUS.md`.
 
 - Google and Microsoft OAuth login.
 - Broader offline sync for flashcards, quizzes, and documents.
-- Realtime collaboration with SignalR.
 - Push/mobile notification delivery.
 - Deeper unit, integration, UI, security, and performance test suites.
 - Production secrets, monitoring, and Azure deployment.

@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.SignalR;
 using UglyToad.PdfPig;
 using YoutubeExplode;
 
@@ -20,6 +21,7 @@ builder.Services.AddDbContext<LearnOsDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("LearnOsDb")));
 builder.Services.AddHttpClient<OpenAiLearningService>();
 builder.Services.AddScoped<SmtpNotificationService>();
+builder.Services.AddSignalR();
 
 builder.Services.AddAuthorization(options =>
 {
@@ -48,6 +50,20 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt["SigningKey"]!)),
             ClockSkew = TimeSpan.FromSeconds(30)
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrWhiteSpace(accessToken) && path.StartsWithSegments("/hubs/collaboration"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddCors(options =>
@@ -57,7 +73,8 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins("http://127.0.0.1:5173", "http://localhost:5173")
             .AllowAnyHeader()
-            .AllowAnyMethod();
+            .AllowAnyMethod()
+            .AllowCredentials();
     });
 });
 
@@ -85,6 +102,8 @@ app.MapGet("/api/v1/health", async (LearnOsDbContext db) =>
         checkedAt = DateTimeOffset.UtcNow
     });
 });
+
+app.MapHub<CollaborationHub>("/hubs/collaboration");
 
 app.MapPost("/api/v1/auth/register", async (RegisterRequest request, LearnOsDbContext db, IConfiguration config) =>
 {
@@ -1601,7 +1620,7 @@ app.MapGet("/api/v1/collaboration/rooms/{roomId:guid}/messages", async (Guid roo
     return Results.Ok(messages);
 }).RequireAuthorization("StudentOrTeacher");
 
-app.MapPost("/api/v1/collaboration/rooms/{roomId:guid}/messages", async (Guid roomId, CreateCollaborationMessageRequest request, ClaimsPrincipal principal, LearnOsDbContext db) =>
+app.MapPost("/api/v1/collaboration/rooms/{roomId:guid}/messages", async (Guid roomId, CreateCollaborationMessageRequest request, ClaimsPrincipal principal, LearnOsDbContext db, IHubContext<CollaborationHub> hub) =>
 {
     var userId = GetCurrentUserId(principal);
     if (string.IsNullOrWhiteSpace(request.Content))
@@ -1628,13 +1647,16 @@ app.MapPost("/api/v1/collaboration/rooms/{roomId:guid}/messages", async (Guid ro
     db.CollaborationMessages.Add(message);
     await db.SaveChangesAsync();
 
-    return Results.Created($"/api/v1/collaboration/rooms/{roomId}/messages/{message.Id}", new CollaborationMessageDto(
+    var dto = new CollaborationMessageDto(
         message.Id,
         message.RoomId,
         message.UserId,
         message.DisplayName,
         message.Content,
-        message.CreatedAt));
+        message.CreatedAt);
+    await hub.Clients.Group(roomId.ToString()).SendAsync("RoomMessageReceived", dto);
+
+    return Results.Created($"/api/v1/collaboration/rooms/{roomId}/messages/{message.Id}", dto);
 }).RequireAuthorization("StudentOrTeacher");
 
 app.MapGet("/api/v1/notifications/reminders", async (ClaimsPrincipal principal, LearnOsDbContext db) =>
@@ -2799,6 +2821,66 @@ Keep going.
         }
 
         await client.SendMailAsync(message);
+    }
+}
+
+[Authorize(Policy = "StudentOrTeacher")]
+sealed class CollaborationHub(LearnOsDbContext db) : Hub
+{
+    public async Task JoinRoom(Guid roomId)
+    {
+        var userId = GetHubUserId();
+        if (!await db.CollaborationRoomMembers.AnyAsync(member => member.RoomId == roomId && member.UserId == userId))
+        {
+            throw new HubException("Room was not found.");
+        }
+
+        await Groups.AddToGroupAsync(Context.ConnectionId, roomId.ToString());
+    }
+
+    public async Task<CollaborationMessageDto> SendRoomMessage(Guid roomId, string content)
+    {
+        var userId = GetHubUserId();
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new HubException("Message content is required.");
+        }
+
+        if (!await db.CollaborationRoomMembers.AnyAsync(member => member.RoomId == roomId && member.UserId == userId))
+        {
+            throw new HubException("Room was not found.");
+        }
+
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(item => item.Id == userId);
+        var message = new CollaborationMessage
+        {
+            Id = Guid.NewGuid(),
+            RoomId = roomId,
+            UserId = userId,
+            DisplayName = user?.DisplayName ?? "Learner",
+            Content = content.Trim(),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        db.CollaborationMessages.Add(message);
+        await db.SaveChangesAsync();
+
+        var dto = new CollaborationMessageDto(
+            message.Id,
+            message.RoomId,
+            message.UserId,
+            message.DisplayName,
+            message.Content,
+            message.CreatedAt);
+
+        await Clients.Group(roomId.ToString()).SendAsync("RoomMessageReceived", dto);
+        return dto;
+    }
+
+    private Guid GetHubUserId()
+    {
+        var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(userId, out var id) ? id : Guid.Empty;
     }
 }
 

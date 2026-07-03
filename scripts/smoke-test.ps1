@@ -26,6 +26,10 @@ $headers = @{ Authorization = "Bearer $($auth.accessToken)" }
 $me = Invoke-RestMethod -Uri "$BaseUrl/me" -Headers $headers
 Assert-True ($me.email -eq "smoke-$stamp@learnos.local") "me should return registered user"
 
+$hubBaseUrl = $BaseUrl -replace "/api/v1$", "/hubs"
+$hubNegotiation = Invoke-RestMethod -Uri "$hubBaseUrl/collaboration/negotiate?negotiateVersion=1&access_token=$($auth.accessToken)" -Method Post
+Assert-True ([bool]$hubNegotiation.connectionToken) "SignalR collaboration hub should negotiate with JWT access token"
+
 $verification = Invoke-RestMethod -Uri "$BaseUrl/auth/email-verification/request" -Method Post -ContentType "application/json" -Body (@{ email = "smoke-$stamp@learnos.local" } | ConvertTo-Json)
 Assert-True ([bool]$verification.verificationToken) "email verification request should generate token in dev mode"
 $verified = Invoke-RestMethod -Uri "$BaseUrl/auth/email-verification/confirm" -Method Post -ContentType "application/json" -Body (@{ token = $verification.verificationToken } | ConvertTo-Json)

@@ -295,16 +295,26 @@ Work module by module. After each module is completed and verified, stop and ask
 - Expanded smoke test coverage for rubric persistence and submission grading.
 - Verified frontend lint/build, smoke test, and Release backend build pass.
 
+## Completed SignalR Realtime Collaboration MVP
+
+- Added ASP.NET Core SignalR services and `/hubs/collaboration` hub route.
+- Configured JWT bearer authentication for SignalR `access_token` query negotiation.
+- Added `CollaborationHub` with room membership checks, room group join, DB-backed message persistence, and realtime broadcast.
+- Existing REST message endpoint now also broadcasts `RoomMessageReceived` events.
+- Added `@microsoft/signalr` frontend dependency.
+- Collaboration tab now connects to the hub, joins selected rooms, shows realtime status, receives live messages, and sends messages through SignalR when connected.
+- Expanded smoke test coverage for authenticated SignalR negotiation.
+- Verified authenticated hub negotiation, frontend lint/build, smoke test, and Release backend build pass.
+
 ## Next Planned Modules
 
 Most large prompt modules now have a working MVP implementation. Remaining future-hardening work:
 
 1. Google/Microsoft OAuth login.
 2. Broader offline sync for flashcards, quizzes, and documents.
-3. Realtime collaboration with SignalR.
-4. Push notifications/mobile delivery.
-5. More formal unit/integration/UI/security/performance test suites.
-6. Production secrets, monitoring, and Azure deployment.
+3. Push notifications/mobile delivery.
+4. More formal unit/integration/UI/security/performance test suites.
+5. Production secrets, monitoring, and Azure deployment.
 
 ## Verification Commands
 

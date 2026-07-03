@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import * as signalR from '@microsoft/signalr'
 import {
   Area,
   AreaChart,
@@ -39,6 +40,7 @@ import {
 import './App.css'
 
 const API_BASE = 'http://127.0.0.1:5000/api/v1'
+const HUB_BASE = 'http://127.0.0.1:5000/hubs'
 
 type TabKey = 'dashboard' | 'documents' | 'flashcards' | 'quiz' | 'roadmap' | 'classroom' | 'collaboration' | 'planner' | 'analytics'
 
@@ -1546,6 +1548,8 @@ function Collaboration({
   const [joinCode, setJoinCode] = useState('')
   const [messageText, setMessageText] = useState('')
   const [status, setStatus] = useState('')
+  const [realtimeStatus, setRealtimeStatus] = useState('Offline')
+  const connectionRef = useRef<signalR.HubConnection | null>(null)
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId) ?? rooms[0]
 
   useEffect(() => {
@@ -1572,6 +1576,52 @@ function Collaboration({
 
     loadMessages(selectedRoom.id).catch((err: Error) => setStatus(err.message))
   }, [loadMessages, selectedRoom?.id])
+
+  useEffect(() => {
+    if (!selectedRoom?.id) {
+      return
+    }
+
+    let isDisposed = false
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl(`${HUB_BASE}/collaboration`, {
+        accessTokenFactory: () => loadAuth()?.accessToken ?? '',
+      })
+      .withAutomaticReconnect()
+      .build()
+
+    connectionRef.current = connection
+    connection.on('RoomMessageReceived', (message: CollaborationMessage) => {
+      setMessages((current) => (
+        current.some((item) => item.id === message.id)
+          ? current
+          : [...current, message].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
+      ))
+    })
+    connection.onreconnecting(() => setRealtimeStatus('Reconnecting'))
+    connection.onreconnected(() => {
+      setRealtimeStatus('Live')
+      connection.invoke('JoinRoom', selectedRoom.id).catch(() => setRealtimeStatus('Offline'))
+    })
+    connection.onclose(() => {
+      if (!isDisposed) {
+        setRealtimeStatus('Offline')
+      }
+    })
+
+    connection
+      .start()
+      .then(() => connection.invoke('JoinRoom', selectedRoom.id))
+      .then(() => setRealtimeStatus('Live'))
+      .catch(() => setRealtimeStatus('Offline'))
+
+    return () => {
+      isDisposed = true
+      setRealtimeStatus('Offline')
+      connectionRef.current = null
+      connection.stop().catch(() => undefined)
+    }
+  }, [selectedRoom?.id])
 
   async function createRoom() {
     if (!roomName.trim()) return
@@ -1600,12 +1650,17 @@ function Collaboration({
 
   async function sendMessage() {
     if (!selectedRoom || !messageText.trim()) return
-    await api<CollaborationMessage>(`/collaboration/rooms/${selectedRoom.id}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ content: messageText }),
-    })
+    const nextMessage = messageText
     setMessageText('')
-    await loadMessages(selectedRoom.id)
+    if (connectionRef.current?.state === signalR.HubConnectionState.Connected) {
+      await connectionRef.current.invoke('SendRoomMessage', selectedRoom.id, nextMessage)
+    } else {
+      await api<CollaborationMessage>(`/collaboration/rooms/${selectedRoom.id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ content: nextMessage }),
+      })
+      await loadMessages(selectedRoom.id)
+    }
     await onChanged()
   }
 
@@ -1617,7 +1672,7 @@ function Collaboration({
             <span className="eyebrow">Study rooms</span>
             <h3>{selectedRoom?.name ?? 'Create or join a room'}</h3>
           </div>
-          <Users size={22} />
+          <span className={realtimeStatus === 'Live' ? 'difficulty easy' : 'difficulty medium'}>{realtimeStatus}</span>
         </div>
         {selectedRoom ? (
           <>
