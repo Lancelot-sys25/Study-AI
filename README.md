@@ -72,13 +72,13 @@ npm install
 ### Run the backend
 
 ```powershell
-dotnet run --project backend\LearnOS.Api\LearnOS.Api.csproj --urls http://localhost:3000
+dotnet run --project backend\LearnOS.Api\LearnOS.Api.csproj --urls http://localhost:5000
 ```
 
 Health check:
 
 ```text
-http://localhost:3000/api/v1/health
+http://localhost:5000/api/v1/health
 ```
 
 The backend applies EF Core migrations on startup through `Database.MigrateAsync()`.
@@ -98,7 +98,7 @@ npm run dev
 Frontend URL:
 
 ```text
-http://127.0.0.1:5173
+http://localhost:3000
 ```
 
 ## Configuration
@@ -164,8 +164,8 @@ docker compose up --build
 
 Services:
 
-- Frontend: `http://127.0.0.1:5173`
-- Backend: `http://localhost:3000`
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:5000`
 - SQL Server: `localhost,1433`
 
 ## Documentation

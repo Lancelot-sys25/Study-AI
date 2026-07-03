@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "next dev --webpack -H 127.0.0.1 -p 5173",
+    "dev": "next dev --webpack -H localhost -p 3000",
     "build": "next build",
     "lint": "oxlint --ignore-pattern .next --ignore-pattern dist",
-    "start": "next start -H 127.0.0.1 -p 5173"
+    "start": "next start -H localhost -p 3000"
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.0",

@@ -25,7 +25,7 @@ Required services:
 
 Recommended ports:
 
-- Frontend: `5173`
+- Frontend: `3000`
 - Backend: `5000` or `5001`
 - SQL Server: `1433`
 - Redis: `6379`

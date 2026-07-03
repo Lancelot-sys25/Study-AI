@@ -40,8 +40,8 @@ import {
   Zap,
 } from 'lucide-react'
 
-const API_BASE = 'http://localhost:3000/api/v1'
-const HUB_BASE = 'http://localhost:3000/hubs'
+const API_BASE = 'http://localhost:5000/api/v1'
+const HUB_BASE = 'http://localhost:5000/hubs'
 const isBrowser = () => typeof window !== 'undefined'
 
 type TabKey = 'dashboard' | 'documents' | 'flashcards' | 'quiz' | 'roadmap' | 'classroom' | 'collaboration' | 'planner' | 'analytics'

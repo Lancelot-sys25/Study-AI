@@ -1,5 +1,5 @@
 param(
-    [string]$BaseUrl = "http://localhost:3000/api/v1"
+    [string]$BaseUrl = "http://localhost:5000/api/v1"
 )
 
 $ErrorActionPreference = "Stop"
