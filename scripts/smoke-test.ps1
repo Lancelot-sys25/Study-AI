@@ -166,8 +166,9 @@ $joinedCourse = Invoke-RestMethod -Uri "$BaseUrl/courses/join" -Method Post -Con
 Assert-True ($joinedCourse.role -eq "Student") "student should join course"
 
 $assignmentDueAt = (Get-Date).ToUniversalTime().AddDays(2).ToString("o")
-$assignment = Invoke-RestMethod -Uri "$BaseUrl/courses/$($course.id)/assignments" -Method Post -ContentType "application/json" -Headers $teacherHeaders -Body (@{ title = "Smoke Assignment"; instructions = "Explain active recall."; dueAt = $assignmentDueAt } | ConvertTo-Json)
+$assignment = Invoke-RestMethod -Uri "$BaseUrl/courses/$($course.id)/assignments" -Method Post -ContentType "application/json" -Headers $teacherHeaders -Body (@{ title = "Smoke Assignment"; instructions = "Explain active recall."; rubric = "Accuracy 60, clarity 40"; dueAt = $assignmentDueAt } | ConvertTo-Json)
 Assert-True ([bool]$assignment.id) "teacher should create assignment"
+Assert-True ($assignment.rubric -eq "Accuracy 60, clarity 40") "assignment should persist rubric"
 
 $studentAssignments = Invoke-RestMethod -Uri "$BaseUrl/courses/$($course.id)/assignments" -Headers $headers
 Assert-True (@($studentAssignments | Where-Object { $_.id -eq $assignment.id }).Count -eq 1) "student should see course assignment"
@@ -177,5 +178,10 @@ Assert-True ($submission.content -like "Active recall*") "student should submit 
 
 $courseSubmissions = Invoke-RestMethod -Uri "$BaseUrl/courses/$($course.id)/submissions" -Headers $teacherHeaders
 Assert-True (@($courseSubmissions | Where-Object { $_.id -eq $submission.id }).Count -eq 1) "teacher should see course submission"
+
+$gradedSubmission = Invoke-RestMethod -Uri "$BaseUrl/assignments/$($assignment.id)/submissions/$($submission.id)/grade" -Method Put -ContentType "application/json" -Headers $teacherHeaders -Body (@{ score = 95; feedback = "Strong retrieval explanation." } | ConvertTo-Json)
+Assert-True ($gradedSubmission.score -eq 95) "teacher should grade submission score"
+Assert-True ($gradedSubmission.feedback -eq "Strong retrieval explanation.") "teacher should save submission feedback"
+Assert-True ([bool]$gradedSubmission.gradedAt) "graded submission should include graded timestamp"
 
 Write-Host "Smoke tests passed."

@@ -16,7 +16,7 @@ The project is designed as a commercial-grade learning product foundation inspir
 - Document ingestion for TXT, Markdown, PDF, images, audio, video, and YouTube transcripts.
 - Quiz engine with persisted quizzes, questions, scored attempts, and gamification rewards.
 - Parent/guardian linking with invite codes and scoped student progress dashboards.
-- Classroom workflow with courses, join codes, assignments, submissions, and teacher review.
+- Classroom workflow with courses, join codes, assignments, rubrics, submissions, grading, feedback, and teacher review.
 - Collaboration rooms with join codes and persisted member-only messages.
 - Planner reminders with in-app notification badge, SMTP email delivery, and offline queue sync.
 - PWA/offline MVP with manifest, service worker, offline banner, and queued reminder sync.
@@ -232,6 +232,7 @@ Project implementation status is tracked in `PROJECT_STATUS.md`.
 - `POST /api/v1/courses/{courseId}/assignments`
 - `POST /api/v1/assignments/{assignmentId}/submissions`
 - `GET /api/v1/courses/{courseId}/submissions`
+- `PUT /api/v1/assignments/{assignmentId}/submissions/{submissionId}/grade`
 
 ### Learning
 
@@ -278,7 +279,6 @@ Project implementation status is tracked in `PROJECT_STATUS.md`.
 ## Current Roadmap
 
 - Google and Microsoft OAuth login.
-- Grading, rubrics, and assignment feedback.
 - Broader offline sync for flashcards, quizzes, and documents.
 - Realtime collaboration with SignalR.
 - Push/mobile notification delivery.

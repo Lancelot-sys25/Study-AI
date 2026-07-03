@@ -660,7 +660,7 @@ app.MapGet("/api/v1/courses/{courseId:guid}/assignments", async (Guid courseId, 
         .AsNoTracking()
         .Where(assignment => assignment.CourseId == courseId)
         .OrderBy(assignment => assignment.DueAt)
-        .Select(assignment => new AssignmentDto(assignment.Id, assignment.CourseId, assignment.Title, assignment.Instructions, assignment.DueAt, assignment.CreatedAt))
+        .Select(assignment => new AssignmentDto(assignment.Id, assignment.CourseId, assignment.Title, assignment.Instructions, assignment.Rubric, assignment.DueAt, assignment.CreatedAt))
         .ToListAsync();
 
     return Results.Ok(assignments);
@@ -685,6 +685,7 @@ app.MapPost("/api/v1/courses/{courseId:guid}/assignments", [Authorize(Policy = "
         CourseId = courseId,
         Title = request.Title.Trim(),
         Instructions = request.Instructions?.Trim() ?? string.Empty,
+        Rubric = request.Rubric?.Trim() ?? string.Empty,
         DueAt = request.DueAt,
         CreatedAt = DateTime.UtcNow
     };
@@ -692,7 +693,7 @@ app.MapPost("/api/v1/courses/{courseId:guid}/assignments", [Authorize(Policy = "
     db.Assignments.Add(assignment);
     await db.SaveChangesAsync();
 
-    return Results.Created($"/api/v1/courses/{courseId}/assignments/{assignment.Id}", new AssignmentDto(assignment.Id, assignment.CourseId, assignment.Title, assignment.Instructions, assignment.DueAt, assignment.CreatedAt));
+    return Results.Created($"/api/v1/courses/{courseId}/assignments/{assignment.Id}", new AssignmentDto(assignment.Id, assignment.CourseId, assignment.Title, assignment.Instructions, assignment.Rubric, assignment.DueAt, assignment.CreatedAt));
 });
 
 app.MapPost("/api/v1/assignments/{assignmentId:guid}/submissions", async (Guid assignmentId, CreateAssignmentSubmissionRequest request, ClaimsPrincipal principal, LearnOsDbContext db) =>
@@ -745,6 +746,29 @@ app.MapGet("/api/v1/courses/{courseId:guid}/submissions", [Authorize(Policy = "T
         .ToListAsync();
 
     return Results.Ok(submissions);
+});
+
+app.MapPut("/api/v1/assignments/{assignmentId:guid}/submissions/{submissionId:guid}/grade", [Authorize(Policy = "TeacherOnly")] async (Guid assignmentId, Guid submissionId, GradeSubmissionRequest request, ClaimsPrincipal principal, LearnOsDbContext db) =>
+{
+    var teacherId = GetCurrentUserId(principal);
+    var assignment = await db.Assignments.AsNoTracking().FirstOrDefaultAsync(item => item.Id == assignmentId);
+    if (assignment is null || !await IsCourseTeacher(db, assignment.CourseId, teacherId, principal))
+    {
+        return Results.NotFound();
+    }
+
+    var submission = await db.AssignmentSubmissions.FirstOrDefaultAsync(item => item.Id == submissionId && item.AssignmentId == assignmentId);
+    if (submission is null)
+    {
+        return Results.NotFound();
+    }
+
+    submission.Score = Math.Clamp(request.Score, 0, 100);
+    submission.Feedback = request.Feedback?.Trim() ?? string.Empty;
+    submission.GradedAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+
+    return Results.Ok(ToAssignmentSubmissionDto(submission));
 });
 
 app.MapGet("/api/v1/flashcards", async (ClaimsPrincipal principal, LearnOsDbContext db) =>
@@ -2578,6 +2602,7 @@ sealed class Assignment
     public Course Course { get; set; } = null!;
     public string Title { get; set; } = string.Empty;
     public string Instructions { get; set; } = string.Empty;
+    public string Rubric { get; set; } = string.Empty;
     public DateTime DueAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<AssignmentSubmission> Submissions { get; set; } = [];
@@ -2717,13 +2742,15 @@ record CreateCourseRequest(string Name, string? Subject);
 
 record JoinCourseRequest(string? Code);
 
-record AssignmentDto(Guid Id, Guid CourseId, string Title, string Instructions, DateTime DueAt, DateTime CreatedAt);
+record AssignmentDto(Guid Id, Guid CourseId, string Title, string Instructions, string Rubric, DateTime DueAt, DateTime CreatedAt);
 
-record CreateAssignmentRequest(string Title, string? Instructions, DateTime DueAt);
+record CreateAssignmentRequest(string Title, string? Instructions, string? Rubric, DateTime DueAt);
 
 record AssignmentSubmissionDto(Guid Id, Guid AssignmentId, Guid StudentId, string Content, int? Score, string Feedback, DateTime SubmittedAt, DateTime? GradedAt);
 
 record CreateAssignmentSubmissionRequest(string Content);
+
+record GradeSubmissionRequest(int Score, string? Feedback);
 
 record RoadmapRequest(string Goal, string Level, DateOnly? Deadline, int WeeklyHours);
 

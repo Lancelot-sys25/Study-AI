@@ -744,7 +744,8 @@ h3 {
 
 .data-form input,
 .data-form select,
-.data-form textarea {
+.data-form textarea,
+.feedback-input {
   width: 100%;
   border: 1px solid rgba(28, 35, 33, 0.12);
   border-radius: 8px;
@@ -754,9 +755,15 @@ h3 {
   font: inherit;
 }
 
-.data-form textarea {
+.data-form textarea,
+.feedback-input {
   min-height: 128px;
   resize: vertical;
+}
+
+.feedback-input {
+  min-height: 76px;
+  margin-top: 8px;
 }
 
 .empty-state {

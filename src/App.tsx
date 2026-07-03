@@ -202,6 +202,7 @@ type Assignment = {
   courseId: string
   title: string
   instructions: string
+  rubric: string
   dueAt: string
   createdAt: string
 }
@@ -1299,7 +1300,9 @@ function Classroom({
   const [joinCode, setJoinCode] = useState('')
   const [assignmentTitle, setAssignmentTitle] = useState('')
   const [assignmentInstructions, setAssignmentInstructions] = useState('')
+  const [assignmentRubric, setAssignmentRubric] = useState('')
   const [submissionContent, setSubmissionContent] = useState('')
+  const [gradeDrafts, setGradeDrafts] = useState<Record<string, { score: string; feedback: string }>>({})
   const [status, setStatus] = useState('')
   const selectedCourse = courses.find((course) => course.id === selectedCourseId) ?? courses[0]
   const canTeach = userRole === 'Teacher' || userRole === 'Admin'
@@ -1360,11 +1363,13 @@ function Classroom({
       body: JSON.stringify({
         title: assignmentTitle,
         instructions: assignmentInstructions,
+        rubric: assignmentRubric,
         dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       }),
     })
     setAssignmentTitle('')
     setAssignmentInstructions('')
+    setAssignmentRubric('')
     await loadCourseData(selectedCourse.id)
   }
 
@@ -1376,6 +1381,22 @@ function Classroom({
     })
     setSubmissionContent('')
     setStatus('Assignment submitted.')
+    if (selectedCourse) {
+      await loadCourseData(selectedCourse.id)
+    }
+  }
+
+  async function gradeSubmission(submission: AssignmentSubmission) {
+    const draft = gradeDrafts[submission.id]
+    if (!draft?.score) return
+    await api(`/assignments/${submission.assignmentId}/submissions/${submission.id}/grade`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        score: Number(draft.score),
+        feedback: draft.feedback,
+      }),
+    })
+    setStatus('Submission graded.')
     if (selectedCourse) {
       await loadCourseData(selectedCourse.id)
     }
@@ -1405,6 +1426,7 @@ function Classroom({
                   <span className="quiz-type">Due {new Date(assignment.dueAt).toLocaleDateString()}</span>
                   <h3>{assignment.title}</h3>
                   <p className="muted">{assignment.instructions || 'No instructions.'}</p>
+                  {assignment.rubric && <p className="muted">Rubric: {assignment.rubric}</p>}
                   {!canTeach && (
                     <div className="data-form">
                       <textarea value={submissionContent} onChange={(event) => setSubmissionContent(event.target.value)} placeholder="Write your submission..." />
@@ -1418,9 +1440,39 @@ function Classroom({
               <div className="deck-list">
                 {submissions.map((submission) => (
                   <div className="document-item" key={submission.id}>
-                    <strong>Submission</strong>
+                    <strong>Submission {submission.score !== undefined && submission.score !== null ? `· ${submission.score}/100` : ''}</strong>
                     <span>{submission.content}</span>
+                    <em>{submission.feedback || 'No feedback yet.'}</em>
                     <em>{new Date(submission.submittedAt).toLocaleString()}</em>
+                    <div className="data-form inline-form">
+                      <input
+                        min="0"
+                        max="100"
+                        onChange={(event) => setGradeDrafts((current) => ({
+                          ...current,
+                          [submission.id]: {
+                            score: event.target.value,
+                            feedback: current[submission.id]?.feedback ?? submission.feedback,
+                          },
+                        }))}
+                        placeholder="Score"
+                        type="number"
+                        value={gradeDrafts[submission.id]?.score ?? submission.score?.toString() ?? ''}
+                      />
+                      <button className="primary-button compact" onClick={() => gradeSubmission(submission)} type="button">Grade</button>
+                    </div>
+                    <textarea
+                      className="feedback-input"
+                      onChange={(event) => setGradeDrafts((current) => ({
+                        ...current,
+                        [submission.id]: {
+                          score: current[submission.id]?.score ?? submission.score?.toString() ?? '',
+                          feedback: event.target.value,
+                        },
+                      }))}
+                      placeholder="Feedback"
+                      value={gradeDrafts[submission.id]?.feedback ?? submission.feedback}
+                    />
                   </div>
                 ))}
               </div>
@@ -1458,6 +1510,7 @@ function Classroom({
           <div className="data-form">
             <input value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} placeholder="Assignment title" />
             <textarea value={assignmentInstructions} onChange={(event) => setAssignmentInstructions(event.target.value)} placeholder="Instructions" />
+            <textarea value={assignmentRubric} onChange={(event) => setAssignmentRubric(event.target.value)} placeholder="Rubric, e.g. Accuracy 60, clarity 40" />
             <button className="primary-button" onClick={createAssignment} type="button">Create assignment</button>
           </div>
         )}

@@ -285,17 +285,26 @@ Work module by module. After each module is completed and verified, stop and ask
 - Expanded smoke test coverage for course creation, join, assignment creation, submission, and teacher submission review.
 - Verified full smoke test and Release backend build pass.
 
+## Completed Grading/Rubrics MVP
+
+- Added `Rubric` field to assignments with migration `AddAssignmentRubrics`.
+- Added teacher-only grading endpoint for assignment submissions.
+- Teachers can save numeric scores, feedback, and graded timestamp.
+- Classroom UI now supports rubric entry during assignment creation.
+- Teacher submission review UI now supports score and feedback entry.
+- Expanded smoke test coverage for rubric persistence and submission grading.
+- Verified frontend lint/build, smoke test, and Release backend build pass.
+
 ## Next Planned Modules
 
 Most large prompt modules now have a working MVP implementation. Remaining future-hardening work:
 
 1. Google/Microsoft OAuth login.
-2. Grading/rubrics and assignment feedback.
-3. Broader offline sync for flashcards, quizzes, and documents.
-4. Realtime collaboration with SignalR.
-5. Push notifications/mobile delivery.
-6. More formal unit/integration/UI/security/performance test suites.
-7. Production secrets, monitoring, and Azure deployment.
+2. Broader offline sync for flashcards, quizzes, and documents.
+3. Realtime collaboration with SignalR.
+4. Push notifications/mobile delivery.
+5. More formal unit/integration/UI/security/performance test suites.
+6. Production secrets, monitoring, and Azure deployment.
 
 ## Verification Commands
 
